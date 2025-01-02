@@ -119,7 +119,7 @@ app.post('/api/register', async (req, res) => {
                 userType: user.userType,
             },
             JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '2M' }
         );
         
 
