@@ -10,8 +10,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@sendgrid/mail": "^7.7.0",
     "bcrypt": "^5.1.1",
     "express": "^4.21.1",
-    "mongod": "^2.0.0"
+    "fs": "^0.0.1-security",
+    "mongod": "^2.0.0",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "path": "^0.12.7"
   }
 }
