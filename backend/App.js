@@ -526,15 +526,15 @@ cron.schedule('0 0 * * *', () => {
 });
 const LitigantSchema = new mongoose.Schema({
     party_id: { type: String, required: true, unique: true },
-    party_type: { 
-        type: String, 
+    party_type: {
+        type: String,
         required: true,
         enum: ['plaintiff', 'defendant']
     },
     full_name: { type: String, required: true },
     parentage: { type: String, required: true },
-    gender: { 
-        type: String, 
+    gender: {
+        type: String,
         required: true,
         enum: ['male', 'female', 'other']
     },
@@ -553,10 +553,35 @@ const LitigantSchema = new mongoose.Schema({
         default: 'pending'
     },
     lastLogin: Date,
-    lastLogout: Date
+    lastLogout: Date,
+
+    // Additional fields for case filing
+    case_filing_details: {
+        relation_type: {
+            type: String,
+            enum: ['FATHER', 'MOTHER', 'HUSBAND']
+        },
+        pin: String,
+        age: Number,
+        caste: String,
+        nationality: {
+            type: String,
+            enum: ['INDIAN', 'OTHER']
+        },
+        occupation: String,
+        subject: String,
+        fax: String,
+        phone: String
+    },
+    advocates: [{
+        advocate_code: { type: String },
+        advocate_name: { type: String }
+    }]
 }, {
     timestamps: true
 });
+
+// Indexes
 
 const Litigant = mongoose.model('Litigant', LitigantSchema);
 
@@ -1186,7 +1211,176 @@ async function initializeData() {
     console.error('Error initializing data:', error);
   }
 }
-
+const HearingSchema = new mongoose.Schema({
+    hearing_id: { type: String, required: true, unique: true },
+    hearing_date: { type: Date, required: true },
+    next_hearing_date:{type:Date},
+    court_details: {
+      court_name: { type: String, required: true },
+      court_number: String,
+      location: String,
+      judges: [{
+        name: { type: String, required: true },
+        designation: String
+      }]
+    },
+    interim_orders: String,
+    status: {
+      type: String,
+      enum: ['SCHEDULED', 'IN_PROGRESS', 'CONCLUDED', 'ADJOURNED'],
+      required: true
+    }
+  });
+  const DocumentSchema = new mongoose.Schema({
+    document_id: { type: String, required: true, unique: true },
+    document_type: { type: String, required: true },
+    file_name: { type: String, required: true },
+    file_path: { type: String, required: true },
+    uploaded_date: { type: Date, required: true }
+  });
+  const ContactSchema = new mongoose.Schema({
+    phone: String,
+    mobile: String,
+    email_address: String,
+    fax: String
+  });
+const ComprehensiveCaseSchema = new mongoose.Schema({
+    // Auto-generated Identifiers
+    case_id: { 
+      type: String, 
+      required: true, 
+      unique: true,
+      default: () => new mongoose.Types.ObjectId().toString()
+    },
+    case_number: {
+      type: String,
+      required: true,
+      unique: true
+      // Will be generated based on business logic
+    },
+  
+    // Case Type and Basic Details
+    case_type: {
+      type: String,
+      required: true
+    },
+    
+    // Court Details
+    court_details: {
+      court_name: { type: String, required: true },
+      court_location: String
+    },
+  
+    // Filing Details
+    filing_details: {
+      case_type: String,
+      filing_number: String,
+      filing_date: Date,
+      filing_purpose: String, // Added as per criminal form
+      objection: {
+        raised_date: Date,
+        compliance_date: Date
+      },
+      registration: {
+        number: String,
+        date: Date
+      },
+      listing_date: Date,
+      allocation: {
+        court: String,
+        date: Date
+      },
+      case_code: {
+        prefix: { type: String, default: '2' },
+        main_code: String,
+        suffix: { type: String, default: '200' }
+      },
+      // Administrative tracking
+      filed_by: String,
+      objection_raised_by: String,
+      registration_done_by: String,
+      allocation_done_by: String
+    },
+  
+    // Police Station Details (Criminal Cases)
+    police_station_details: {
+      station_name: String,
+      fir: {
+        number: String,
+        year: String,
+        date_of_offence: Date
+      }
+    },
+  
+    // Case Details
+    case_details: {
+      subject: String,
+      main_matter: {
+        case_type: String,
+        case_number: String,
+        case_year: String
+      }
+    },
+  
+    // Lower Court Details
+    lower_court_details: {
+      court_name: String,
+      case_type: String,
+      case_number: String,
+      decision_date: Date
+    },
+  
+    // Parties (based on case type)
+    parties: {
+      complainant_plaintiff: LitigantSchema,
+      accused_respondent: LitigantSchema
+    },
+  
+    // Case Institution Details
+    institution_details: {
+      case_type: String,
+      registration: {
+        number: String,
+        year: String,
+        date: Date
+      },
+      disposal: {
+        date: Date,
+        nature: {
+          type: String,
+          enum: ['BY_JUDGMENT', 'OTHERWISE']
+        }
+      },
+      presiding_officer: {
+        name: String,
+        designation: String
+      }
+    },
+  
+    // Additional Details
+    documents: [DocumentSchema],
+    hearings: [HearingSchema],
+    additional_info: String,
+  
+    case_status: {
+      current_status: {
+        type: String,
+        enum: ['PENDING', 'ACTIVE', 'DISPOSED'],
+        required: true
+      },
+      finalized: { type: Boolean, default: false }
+    }
+  }, {
+    timestamps: true
+  });
+  
+  // Existing indexes remain the same
+  
+  ComprehensiveCaseSchema.index({ 'filing_details.filing_number': 1 });
+  ComprehensiveCaseSchema.index({ 'filing_details.registration.number': 1 });
+  ComprehensiveCaseSchema.index({ 'case_status.current_status': 1 });
+  
+  module.exports = mongoose.model('ComprehensiveCase', ComprehensiveCaseSchema);
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
