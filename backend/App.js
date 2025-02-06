@@ -1244,6 +1244,294 @@ const HearingSchema = new mongoose.Schema({
     email_address: String,
     fax: String
   });
+  const LegalCaseSchema = new mongoose.Schema({
+    // Court Information
+    court: { 
+      type: String, 
+      required: true,
+      enum: ['District & Sessions Court', 'Other']
+    },
+    case_type: { 
+      type: String, 
+      required: true,
+      enum: ['Civil', 'Criminal']
+    },
+  
+    // Plaintiff/Applicant Details
+    plaintiff_details: {
+      party_id: { type: String },
+      name: { type: String, required: true },
+      father_mother_husband: { type: String },
+      address: { type: String },
+      pin: { type: String },
+      sex: { type: String },
+      age: { type: Number },
+      caste: { type: String },
+      nationality: { type: String },
+      if_other_mention: { type: String },
+      occupation: { type: String },
+      email: { 
+        type: String, 
+        match: [/^\w+([.-]?\w+)@\w+([.-]?\w+)(\.\w{2,3})+$/, 'Please fill a valid email address']
+      },
+      phone: { type: String },
+      mobile: { type: String },
+      fax: { type: String },
+      subject: { type: String },
+      advocate_id: { type: String },
+      advocate: { type: String }
+    },
+  
+    // Respondent/Opponent Details
+    respondent_details: {
+      party_id: { type: String },
+      name: { type: String, required: true },
+      father_mother_husband: { type: String },
+      address: { type: String },
+      pin: { type: String },
+      sex: { type: String },
+      age: { type: Number },
+      caste: { type: String },
+      nationality: { type: String },
+      if_other_mention: { type: String },
+      occupation: { type: String },
+      email: { 
+        type: String, 
+        match: [/^\w+([.-]?\w+)@\w+([.-]?\w+)(\.\w{2,3})+$/, 'Please fill a valid email address']
+      },
+      phone: { type: String },
+      mobile: { type: String },
+      fax: { type: String },
+      subject: { type: String },
+      advocate_id: { type: String },
+      advocate: { type: String }
+    },
+  
+    // Additional Criminal-Specific Details
+    police_station_details: {
+      police_station: { type: String },
+      fir_no: { type: String },
+      fir_year: { type: Number },
+      date_of_offence: { type: Date }
+    },
+  
+    // Lower Court Details
+    lower_court_details: {
+      court_name: { type: String },
+      case_no: { type: String },
+      decision_date: { type: Date }
+    },
+  
+    // Main Matter Details
+    main_matter_details: {
+      case_type: { type: String },
+      case_no: { type: String },
+      year: { type: Number }
+    },
+  
+    // Hearing Management
+    hearings: [{
+      hearing_date: { type: Date },
+      hearing_type: { 
+        type: String, 
+        enum: ['Initial', 'Intermediate', 'Final', 'Adjournment'] 
+      },
+      remarks: { type: String },
+      next_hearing_date: { type: Date }
+    }],
+  
+    // Case Status
+    status: {
+      type: String,
+      enum: [
+        'Filed', 
+        'Pending', 
+        'Under Investigation', 
+        'Hearing in Progress', 
+        'Awaiting Judgment', 
+        'Disposed', 
+        'Appealed'
+      ],
+      default: 'Filed'
+    },
+  
+    // Case Approval
+    case_approved: { 
+      type: Boolean, 
+      default: false 
+    },
+    case_num: { 
+        type: String,
+        unique: true,
+      },
+      case_no: {
+        type: String,
+        unique: true,
+        sparse: true  // This allows multiple null values
+    },
+    // Office Use Details
+    for_office_use_only: {
+      case_type: { type: String },
+      filing_no: { type: String },
+      filing_date: { type: Date },
+      objection_red_date: { type: Date },
+      objection_compliance_date: { type: Date },
+      registration_no: { type: String },
+      registration_date: { type: Date },
+      listing_date: { type: Date },
+      court_allotted: { type: String },
+      allocation_date: { type: Date },
+      case_code: { type: String },
+      
+      // Additional fields for Criminal Cases
+      filing_done_by: { type: String },
+      objection_raised_by: { type: String },
+      registration_done_by: { type: String },
+      allocation_done_by: { type: String }
+    },
+  
+    // Timestamps
+    created_at: { type: Date, default: Date.now },
+    last_updated: { type: Date, default: Date.now }
+  }, {
+    timestamps: true
+  });
+  
+  // Pre-save middleware to update last_updated
+  LegalCaseSchema.pre('save', function(next) {
+    this.last_updated = Date.now();
+    next();
+  });
+  
+  const LegalCase = mongoose.model('LegalCase', LegalCaseSchema);
+  const generateCNRFromCaseData = async (caseData) => {
+    const typePrefix = caseData.case_type === 'Civil' ? 'CL' : 'CM';
+    const year = new Date().getFullYear().toString();
+    
+    // Function to generate a unique serial
+    const generateSerial = () => {
+        // Get nanosecond timestamp
+        const hrTime = process.hrtime();
+        const timestamp = hrTime[0] * 1000000000 + hrTime[1];
+        
+        // Convert to base 36 and take last 2 digits
+        const timeComponent = timestamp.toString(36).slice(-2);
+        
+        // Generate 2 random digits
+        const randomComponent = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+        
+        // Combine them to create a 4-digit serial
+        return (timeComponent + randomComponent).slice(-4).toUpperCase();
+    };
+
+    // Try to generate a unique CNR up to 5 times
+    for (let attempts = 0; attempts < 5; attempts++) {
+        const serialNumber = generateSerial();
+        const cnrNumber = `${typePrefix}${year}${serialNumber}`;
+        
+        // Check if this CNR exists
+        const existingCase = await LegalCase.findOne({ case_num: cnrNumber });
+        
+        if (!existingCase) {
+            return cnrNumber;
+        }
+        
+        // Add small delay before retry
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    
+    // If all attempts fail, use milliseconds + random as last resort
+    const lastResortSerial = (Date.now() % 10000).toString().padStart(4, '0');
+    return `${typePrefix}${year}${lastResortSerial}`;
+};
+
+app.post('/api/filecase/litigant',authenticateToken, async (req, res) => {
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    async function attemptCaseCreation() {
+        try {
+            const {
+                court,
+                case_type,
+                plaintiff_details,
+                respondent_details,
+                police_station_details,
+                lower_court_details,
+                main_matter_details,
+                hearings,
+                status,
+                case_approved,
+                case_no 
+            } = req.body;
+
+            if (!court || !case_type || !plaintiff_details || !respondent_details) {
+                return res.status(400).json({ message: 'Missing required fields' });
+            }
+            plaintiff_details.party_id = req.user.party_id;
+
+            // Generate unique CNR
+            const cnrNumber = await generateCNRFromCaseData({
+                case_type
+            });
+
+            const newCase = new LegalCase({
+                court,
+                case_type,
+                plaintiff_details,
+                respondent_details,
+                police_station_details,
+                lower_court_details,
+                main_matter_details,
+                hearings,
+                status,
+                case_approved: case_approved || false,
+                case_num: cnrNumber
+                ,case_no: cnrNumber  
+            });
+
+            await newCase.save();
+
+            return res.status(201).json({
+                message: 'Case filed successfully',
+                case: newCase,
+                case_num:cnrNumber,
+                case_no:cnrNumber
+            });
+
+        } catch (error) {
+            console.error('Error in case filing:', error);
+            
+            if (error.code === 11000 && retryCount < maxRetries) {
+                retryCount++;
+                console.log(`Retry attempt ${retryCount}`);
+                // Wait for a small random interval before retrying
+                await new Promise(resolve => 
+                    setTimeout(resolve, Math.random() * 100)
+                );
+                return attemptCaseCreation();
+            }
+            
+            throw error;
+        }
+    }
+
+    try {
+        await attemptCaseCreation();
+    } catch (error) {
+        console.error('Final error in case filing:', error);
+        if (error.code === 11000) {
+            res.status(409).json({
+                message: 'Unable to generate unique case number after multiple attempts. Please try again.'
+            });
+        } else {
+            res.status(500).json({
+                message: 'Server error while filing case'
+            });
+        }
+    }
+});
+  
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
